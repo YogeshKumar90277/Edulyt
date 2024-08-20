@@ -1,1 +1,401 @@
+------------------------------------------------------------Task 1: Top 5 Cities with Highest Spends and Their Percentage Contribution------------------------------------------------------
+
+
+
+SELECT TOP 5
+    City,
+    SUM(Amount) AS TotalSpend,
+    (SUM(Amount) * 100.0 / (SELECT SUM(Amount) FROM Credit)) AS PercentageContribution
+FROM
+    Credit
+GROUP BY
+    City
+ORDER BY
+    TotalSpend DESC;
+
+
+
+                                                                                 Explanation:
+
+
+SELECT TOP 5: Utilizes the criteria specified in the ORDER BY clause to retrieve only the top 5 rows.
+
+SUM(Amount) AS TotalSpend: Determines the entire amount spent in every city.
+
+PercentageContribution:Determines the portion of total spending for each city in relation to the total amount spent in all cities. To calculate the percentage, divide the total spending of all cities by the total spending of each city, then multiply the result by 100.
+
+GROUP BY City: Aggregates the results by city so that we can sum the amounts per city.
+
+ORDER BY TotalSpend DESC: Orders the results by total spending in descending order to get the cities with the highest spending first.
+
+
+
+
+
+
+
+
+-------------------------------------------------------------Task 2: Highest Spend Month and Amount for Each Card Type----------------------------------------------------------------------
+
+
+
+SELECT 
+    [Card Type],
+    FORMAT(Date, 'MMMM yyyy') AS Month,
+    SUM(Amount) AS TotalSpend
+FROM
+    Credit
+GROUP BY
+    [Card Type],
+    FORMAT(Date, 'MMMM yyyy')
+ORDER BY
+    [Card Type],
+    TotalSpend DESC;
+
+
+
+                                                                                   Explanation:
+
+FORMAT(Date, 'MMMM yyyy') AS Month: Converts the date into a readable month and year format.
+
+SUM(Amount) AS TotalSpend: Sums the total spending per card type and month.
+
+GROUP BY CardType, FORMAT(Date, 'MMMM yyyy'): Groups the data by card type and month so the sums are calculated for each card type for each month.
+
+ORDER BY CardType, TotalSpend DESC: Orders the results by card type, and within each card type, orders the months by total spending in descending order to find the highest spending months first.
+
+
+ 
+
+                   
+
+------------------------------------------------------Task 3: Transaction Details for Each Card Type When Cumulative Spend Reaches 1,000,000------------------------------------------------
+
+
+WITH CumulativeSpends AS (
+    SELECT
+        *,
+        SUM(Amount) OVER (PARTITION BY [Card Type] ORDER BY Date) AS RunningTotal
+    FROM
+        Credit
+),
+FirstMillionSpends AS (
+    SELECT
+        [Card Type],
+        MIN(Date) AS FirstMillionDate
+    FROM
+        CumulativeSpends
+    WHERE
+        RunningTotal >= 1000000
+    GROUP BY
+        [Card Type]
+)
+SELECT
+    c.[Card Type],
+    c.City,
+    c.Date,
+    c.[Exp Type],
+    c.Gender,
+    c.Amount,
+    c.RunningTotal
+FROM
+    CumulativeSpends c
+JOIN
+    FirstMillionSpends fms ON c.[Card Type] = fms.[Card Type] AND c.Date = fms.FirstMillionDate;
+
+
+                                                 
+
+                                                                                     Explanation
+
+
+CumulativeSpends CTE:
+This Common Table Expression (CTE) calculates the running total of the Amount for each CardType using a window function.
+
+
+FirstMillionSpends CTE:
+
+This CTE finds the first date when the running total for each card type reaches or exceeds 1,000,000.
+
+We use MIN(Date) to ensure that we capture the earliest date for each card type when the cumulative spend reaches 1,000,000.
+
+
+Final SELECT Statement:
+
+We join the CumulativeSpends CTE with FirstMillionSpends to get the transaction details for each card type when the cumulative spend reaches 1,000,000.
+
+The join is done on both CardType and Date to ensure we only get the specific transaction that hit the milestone first.
+
+
+
+
+
+----------------------------------------------------------Task 4: City with Lowest Percentage Spend for Gold Card Type----------------------------------------------------------------------
+
+
+SELECT 
+    City,
+    (SUM(Amount) * 100.0 / (SELECT SUM(Amount) FROM Credit WHERE [Card Type] = 'Gold')) AS PercentageSpend
+FROM
+    Credit
+WHERE
+    [Card Type] = 'Gold'
+GROUP BY
+    City
+ORDER BY
+    PercentageSpend ASC
+OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY;
+
+
+                                                                                      Explanation:
+
+WHERE CardType = 'Gold': Filters transactions to only those using the Gold card type
+.
+PercentageSpend: Calculates the percentage of spending that each city represents out of the total spending for Gold cards.
+
+ORDER BY PercentageSpend ASC: Orders cities by percentage spending in ascending order to find the city with the lowest spending as a percentage.
+
+OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY: Skips 0 rows and fetches the next 1 row, effectively getting the first row (city) with the lowest percentage spend.
+
+
+
+
+
+
+---------------------------------------------------------------------- Task 5: Highest and Lowest Expense Type for Each City----------------------------------------------------------------
+
+WITH ExpenseTypeRanks AS (
+    SELECT
+        City,
+        [Exp Type],
+        SUM(Amount) AS TotalSpend,
+        DENSE_RANK() OVER (PARTITION BY City ORDER BY SUM(Amount) DESC) AS RankDesc,
+        DENSE_RANK() OVER (PARTITION BY City ORDER BY SUM(Amount) ASC) AS RankAsc
+    FROM
+        Credit
+    GROUP BY
+        City,
+        [Exp Type]
+)
+SELECT 
+    City,
+    MAX(CASE WHEN RankDesc = 1 THEN [Exp Type] END) AS HighestExpenseType,
+    MAX(CASE WHEN RankAsc = 1 THEN [Exp Type] END) AS LowestExpenseType
+FROM
+    ExpenseTypeRanks
+GROUP BY
+    City;
+
+
+                                                                                        Explanation:
+
+
+CTE ExpenseTypeRanks: Computes rankings for expense types within each city based on total spending.
+
+DENSE_RANK() OVER (PARTITION BY City ORDER BY SUM(Amount) DESC): Assigns ranks to expense types by spending within each city (highest spending gets rank 1).
+
+RankAsc: Similarly ranks expense types in ascending order.
+
+MAX(CASE WHEN RankDesc = 1 THEN ExpType END): Selects the highest-ranked expense type per city.
+
+MAX(CASE WHEN RankAsc = 1 THEN ExpType END): Selects the lowest-ranked expense type per city.
+
+
+
+
+
+-----------------------------------------------------------Task 6: Percentage Contribution of Spends by Females for Each Expense Type-------------------------------------------------------
+
+
+SELECT 
+    [Exp Type],
+    (SUM(Amount) * 100.0 / (SELECT SUM(Amount) FROM Credit WHERE Gender = 'F')) AS FemaleSpendPercentage
+FROM
+    Credit
+WHERE
+    Gender = 'F'
+GROUP BY
+    [Exp Type];
+
+
+
+                                                                                        Explanation:
+
+WHERE Gender = 'F': Filters transactions to only those made by females.
+
+FemaleSpendPercentage: Calculates the percentage of total female spending each expense type represents.
+
+GROUP BY ExpType: Aggregates spending by expense type for female cardholders.
+
+
+
+
+
+
+--------------------------------------------------------Task 7: Card and Expense Type with Highest Month-over-Month Growth in January 2014--------------------------------------------------
+
+
+-- Common Table Expression to calculate monthly spends and growth
+WITH MonthlySpends AS (
+    SELECT
+        CardType,
+        ExpType,
+        FORMAT(Date, 'yyyy-MM') AS YearMonth,
+        SUM(Amount) AS MonthlyTotal
+    FROM
+        Credit
+    GROUP BY
+        CardType, ExpType, FORMAT(Date, 'yyyy-MM')
+),
+GrowthRates AS (
+    SELECT
+        ms1.CardType,
+        ms1.ExpType,
+        ms1.YearMonth,
+        ms1.MonthlyTotal,
+        ms1.MonthlyTotal - COALESCE(ms2.MonthlyTotal, 0) AS MoM_Growth
+    FROM
+        MonthlySpends ms1
+    LEFT JOIN
+        MonthlySpends ms2
+    ON
+        ms1.CardType = ms2.CardType
+        AND ms1.ExpType = ms2.ExpType
+        AND DATEADD(MONTH, -1, ms1.YearMonth + '-01') = ms2.YearMonth + '-01'
+    WHERE
+        ms1.YearMonth = '2014-01'
+)
+SELECT
+    CardType,
+    ExpType,
+    MonthlyTotal,
+    MoM_Growth
+FROM
+    GrowthRates
+ORDER BY
+    MoM_Growth DESC;
+
+
+
+
+
+                                                                                      Explanation
+
+CTE MonthlySpends:
+FORMAT(Date, 'yyyy-MM') AS YearMonth: Extracts the year and month from the date to group transactions by month.
+
+SUM(Amount) AS MonthlyTotal: Calculates the total amount spent per card type and expense type for each month.
+
+
+CTE GrowthRates:
+LEFT JOIN: Joins the MonthlySpends table with itself to compare each month with the previous month.
+
+DATEADD(MONTH, -1, ms1.YearMonth + '-01') = ms2.YearMonth + '-01': This ensures that we are comparing each month to the previous month.
+
+MoM_Growth: Calculates month-over-month growth by subtracting the previous month's total from the current month's total.
+
+
+Main Query:
+WHERE ms1.YearMonth = '2014-01': Filters for January 2014 to find the highest growth in this month.
+
+ORDER BY MoM_Growth DESC: Orders the results to show the highest growth first.
+
+
+                                                      
+
+
+
+-------------------------------------------------Task 8: City with Highest Total Spend to Total Number of Transactions Ratio During Weekends------------------------------------------------
+
+
+
+SELECT
+    City,
+    SUM(Amount) AS TotalSpend,
+    COUNT(*) AS TotalTransactions,
+    SUM(Amount) / CAST(COUNT(*) AS FLOAT) AS SpendToTransactionRatio
+FROM
+    Credit
+WHERE
+    DATENAME(WEEKDAY, Date) IN ('Saturday', 'Sunday')
+GROUP BY
+    City
+ORDER BY
+    SpendToTransactionRatio DESC
+OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY;
+
+
+
+                                                                                     Explanation:
+
+WHERE DATENAME(WEEKDAY, Date) IN ('Saturday', 'Sunday'): Filters transactions to those occurring on weekends.
+
+SpendToTransactionRatio: Calculates the average spend per
+
+
+                                              
+                                                
+
+
+
+
+-----------------------------------------Task 9: Which city took least number of days to reach its 500th transaction after first transaction in that city?----------------------------------
+
+
+WITH RankedTransactions AS (
+    SELECT
+        City,
+        Date,
+        ROW_NUMBER() OVER (PARTITION BY City ORDER BY Date) AS TransactionRank
+    FROM
+        Credit
+),
+FirstAnd500thTransactionDates AS (
+    SELECT
+        City,
+        MIN(CASE WHEN TransactionRank = 1 THEN Date END) AS FirstTransactionDate,
+        MIN(CASE WHEN TransactionRank = 500 THEN Date END) AS FiveHundredthTransactionDate
+    FROM
+        RankedTransactions
+    WHERE
+        TransactionRank <= 500
+    GROUP BY
+        City
+)
+SELECT TOP 1
+    City,
+    DATEDIFF(DAY, FirstTransactionDate, FiveHundredthTransactionDate) AS DaysTo500thTransaction
+FROM
+    FirstAnd500thTransactionDates
+WHERE
+    FiveHundredthTransactionDate IS NOT NULL
+ORDER BY
+    DaysTo500thTransaction ASC;
+
+
+                                                                                           Explanation
+
+WITH RankedTransactions CTE:
+ROW_NUMBER() OVER (PARTITION BY City ORDER BY Date) AS TransactionRank: Ranks each transaction within its city by date to track the sequence of transactions.
+
+
+FirstAnd500thTransactionDates CTE:
+
+For each city, it identifies:
+FirstTransactionDate: The date of the first transaction.
+
+FiveHundredthTransactionDate: The date of the 500th transaction.
+
+
+Main Query:
+DATEDIFF(DAY, FirstTransactionDate, FiveHundredthTransactionDate): Computes the number of days between the first and 500th transaction for each city.
+
+SELECT TOP 1: Ensures that only one row is returned—the city that reached 500 transactions in the fewest days.
+
+ORDER BY DaysTo500thTransaction ASC: Sorts cities by the calculated number of days in ascending order, ensuring the city with the shortest duration is selected
+
+
+
+
+
 
